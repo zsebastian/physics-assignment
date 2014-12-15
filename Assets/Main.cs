@@ -28,7 +28,7 @@ namespace Pool
 			/* used for the camera */
 			public float viewLength = 5.0f;
 
-			public float cueVelocity = 0.5f;
+			public float cueVelocity = 1f;
 
 			public CueInfo Clone()
 			{
@@ -63,7 +63,13 @@ namespace Pool
 			m_CueBall = GameObject.Instantiate(Resources.Load("Ball")) as GameObject;
 			m_Balls.Add(m_CueBall);
 			m_Cue.transform.position = m_Cue.transform.position + Vector3.up * 1;
-			
+
+			var ball = GameObject.Instantiate(Resources.Load("Ball")) as GameObject;
+			var p = ball.transform.position;
+			p.x += 3;
+			ball.transform.position = p;
+			m_Balls.Add(ball);
+
 			m_BallRadius = 0.056f;
 
 			m_PoolPlane.transform.position += Vector3.down * m_BallRadius;
@@ -106,7 +112,7 @@ namespace Pool
 			}
 			else if (Input.mousePresent)
 			{
-				m_CueInfo.angle = Mathf.Clamp(Mathf.LerpAngle(m_CueInfo.angle, m_CueInfo.angle + m_MouseMovement.y, Time.deltaTime / 10), 0, Mathf.PI / 8);
+				m_CueInfo.angle = Mathf.Clamp(Mathf.LerpAngle(m_CueInfo.angle, m_CueInfo.angle + m_MouseMovement.y, Time.deltaTime / 10), 0.01f, Mathf.PI / 4);
 				m_CueInfo.forwardAngle = Mathf.LerpAngle(m_CueInfo.forwardAngle, m_CueInfo.forwardAngle - m_MouseMovement.x, Time.deltaTime / 1);
 			}
 			m_CueInfo.viewLength = Mathf.Clamp(m_CueInfo.viewLength - Input.GetAxis("Mouse ScrollWheel"), 0, 10);
@@ -131,7 +137,19 @@ namespace Pool
 
 		void DoPool()
 		{
-			if (m_CueBall.GetComponent<PhysicsModel>().Still)
+			foreach(var ball in m_Balls)
+			{
+
+			}
+			bool someBallIsMoving = false;
+			foreach(var ball in m_Balls)
+			{
+				if (!ball.GetComponent<PhysicsModel>().Still)
+				{
+					someBallIsMoving = true;
+				}
+			}
+			if (!someBallIsMoving)
 			{
 				m_State = State.Cue;
 			}
