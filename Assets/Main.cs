@@ -65,9 +65,8 @@ namespace Pool
 			m_Cue.transform.position = m_Cue.transform.position + Vector3.up * 1;
 
 			var ball = GameObject.Instantiate(Resources.Load("Ball")) as GameObject;
-			var p = ball.transform.position;
-			p.x += 3;
-			ball.transform.position = p;
+			ball.GetComponent<PhysicsModel> ().exact = true;
+			ball.GetComponent<Colorize> ().Color = Color.grey;
 			m_Balls.Add(ball);
 
 			m_BallRadius = 0.056f;
@@ -99,6 +98,7 @@ namespace Pool
 			if (Input.mousePresent && Input.GetMouseButtonDown(0))
 			{
 				m_CueBall.GetComponent<PhysicsModel>().Strike(m_CueInfo);
+				m_Balls[1].GetComponent<PhysicsModel>().Strike(m_CueInfo);
 				m_CueInfo = m_CueInfo.Clone();
 				m_State = State.Pool;
 			}
@@ -137,10 +137,12 @@ namespace Pool
 
 		void DoPool()
 		{
+
 			foreach(var ball in m_Balls)
 			{
-
+				
 			}
+
 			bool someBallIsMoving = false;
 			foreach(var ball in m_Balls)
 			{
