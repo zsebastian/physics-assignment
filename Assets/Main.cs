@@ -61,13 +61,22 @@ namespace Pool
 			m_PoolPlane = GameObject.Instantiate(Resources.Load("Table")) as GameObject;
 			m_Cue = GameObject.Instantiate(Resources.Load("Cue")) as GameObject;
 			m_CueBall = GameObject.Instantiate(Resources.Load("Ball")) as GameObject;
+			m_CueBall.GetComponent<PhysicsModel>().old = false;
+			m_CueBall.GetComponent<PhysicsModel>().precise = false;
 			m_Balls.Add(m_CueBall);
 			m_Cue.transform.position = m_Cue.transform.position + Vector3.up * 1;
 
 			var ball = GameObject.Instantiate(Resources.Load("Ball")) as GameObject;
-			var p = ball.transform.position;
-			p.x += 3;
-			ball.transform.position = p;
+			ball.GetComponent<PhysicsModel>().old = true;
+			ball.GetComponent<PhysicsModel>().precise = true;
+			ball.GetComponent<Colorize>().Color = Color.grey;
+			m_Balls.Add(ball);
+
+			ball = GameObject.Instantiate(Resources.Load("Ball")) as GameObject;
+			ball.GetComponent<PhysicsModel>().old = false;
+			ball.GetComponent<PhysicsModel>().precise = true;
+			ball.GetComponent<Colorize>().Color = Color.grey;
+
 			m_Balls.Add(ball);
 
 			m_BallRadius = 0.056f;
@@ -99,7 +108,11 @@ namespace Pool
 			if (Input.mousePresent && Input.GetMouseButtonDown(0))
 			{
 				m_CueBall.GetComponent<PhysicsModel>().Strike(m_CueInfo);
+				m_Balls[1].GetComponent<PhysicsModel>().Strike(m_CueInfo);
+				m_Balls[2].GetComponent<PhysicsModel>().Strike(m_CueInfo);
+
 				m_CueInfo = m_CueInfo.Clone();
+			
 				m_State = State.Pool;
 			}
 			else if (Input.mousePresent && Input.GetMouseButton(1))
