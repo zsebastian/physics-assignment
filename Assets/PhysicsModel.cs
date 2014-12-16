@@ -8,8 +8,11 @@ namespace Pool
 	 */
 	public class PhysicsModel : MonoBehaviour 
 	{
+		private enum State {Still, Sliding, Rolling, Spinning };
+
+		private State m_State;
+
 		public bool Still {get; private set;}
-		public bool old = false;
 		public bool precise = false;
 
 		public float m_ForwardAngle;
@@ -20,7 +23,7 @@ namespace Pool
 		private Vector3 m_AngularVelocity;
 		private float m_Inertia;
 		private float m_BufferedDelta;
-		private const float m_TimeStep = 0.01f;
+		private const float m_TimeStep = 0.001f;
 		private const float g = 9.82f;
 		private float m_Angle;
 		private Vector3 m_RelativeVelocity;
@@ -82,9 +85,7 @@ namespace Pool
 			float cSqr = c * c;
 
 			m_ForwardAngle = info.forwardAngle;
-			float strikeAngle = Mathf.Atan2(a, m_Radius);
-			//m_ForwardAngle += strikeAngle;
-			
+		
 			force = 2 * info.mass * info.cueVelocity;
 
 			force = force / (1 + (m_Mass / info.mass) + (5 / 2 * m_Radius)
@@ -93,7 +94,7 @@ namespace Pool
 				   + (cSqr * Mathf.Pow(Mathf.Sin(info.angle), 2))
 				   - (2 * b * c * Mathf.Cos(info.angle) * Mathf.Sin(info.angle))
 				   ));
-			
+
 			float ax = -c * force * Mathf.Sin(info.angle) + b * force * Mathf.Cos(info.angle);
 			float ay =  a * force * Mathf.Sin(info.angle);
 			float az = -a * force * Mathf.Cos(info.angle);
@@ -122,6 +123,7 @@ namespace Pool
 			m_Rolling = false;
 
 			Still = false;
+			m_State = State.Sliding;
 
 			m_FirstVelocity = m_Velocity;
 			m_FirstRelativeVelocity = m_RelativeVelocity;
@@ -147,11 +149,7 @@ namespace Pool
 
 		void Integrate()
 		{
-			if (old && precise)
-			{
-				//IntegrateOLD();
-			}
-			else if (precise)
+			if (precise)
 			{
 				transform.position = AdvancePrecisePosition(transform.position, m_Time, m_TimeStep);
 			}
@@ -160,142 +158,45 @@ namespace Pool
 				float sfc = m_StaticFrictionCoefficient;
 				float rfc = m_RollingFrictionCoefficient;
 
-				//m_RelativeVelocity -= (7.0f / 2.0f) * sfc * g * m_TimeStep * m_RelativeVelocity.normalized;
-				m_AngularVelocity -= (((5.0f * sfc * g) / (2.0f * m_Radius)) * m_TimeStep) * Vector3.Cross(Vector3.up, m_RelativeVelocity.normalized);
-				m_Velocity -= sfc * g * m_TimeStep * m_RelativeVelocity.normalized;
-
-				Vector2 pos = Vector2.zero;
-				pos.x = -m_Velocity.y * m_TimeStep;
-				pos.y = m_Velocity.x * m_TimeStep;
-				pos = Rotate2D(pos, m_ForwardAngle);
-				transform.position = transform.position - new Vector3(pos.x, 0, pos.y);
-			}
-		}
-
-		void IntegrateOLD()
-		{
-			float[,] tMatrix = new float[2, 2]
-			{ 	
-				{ Mathf.Cos(m_ForwardAngle), - Mathf.Sin(m_ForwardAngle)},
-				{ Mathf.Sin(m_ForwardAngle), Mathf.Cos(m_ForwardAngle) }
-			};
-
-			float sfc = m_StaticFrictionCoefficient;
-			float rfc = m_RollingFrictionCoefficient;
-
-			/* Relative velocity */
-			Vector3 rVel = m_RelativeVelocity;
-
-			Vector2 pos = Vector3.zero;
-
-			/* I THINK!
-			 * This is assumed to be correct. This is not the integrated version of the 
-			 * formula. However, it appears to work. rVel is the relative velocity rv at time 0 (rv(0)),
-			 * and m_RelativeVelocity is the relative velocity at time t (rv(t)). Now, I assume that rv(1)
-			 * is related to rv(2) the same way that rv(0) is related to rv(1). Given that assumption, and
-			 * this I take to be self evident given how the formula looks, I can use that to integrate the
-			 * relative velocity using the euler method.
-			 */
-			//m_RelativeVelocity = rVel - (7.0f / 2.0f) * sfc * g * m_TimeStep * rVel.normalized;
-			rVel = m_RelativeVelocity - (7.0f / 2.0f) * sfc * g * m_Time * m_RelativeVelocity.normalized;
-
-			float slidingDuration = (2.0f * rVel.magnitude) / (7.0f * sfc * g);
-
-			bool forceRoll = false;
-			if (rVel.magnitude <= ((7.0f / 2.0f) * sfc * g * m_TimeStep * rVel.normalized).magnitude || 
-			    slidingDuration - m_TimeStep < float.Epsilon)
-			{
-				forceRoll = true;
-			}
-
-			bool rolling = rVel.magnitude <= Mathf.Epsilon || forceRoll || m_Rolling;
-			bool sliding = !rolling;
-		
-			bool firstRoll = sliding != m_Sliding;
-			m_Sliding = sliding;
-			m_Rolling = rolling;
-
-			if (sliding)
-			{
-				/* I THINK!	*/
-
-				/* Surely this works. Given the formula in the patper: 
-				 * Acceleration is sfc*g*rVel.normalized (the derivative of veloicty), and velocity = a*t.
-				 */
-				Vector3 vel = m_Velocity - sfc * g * m_Time * m_RelativeVelocity.normalized;
-				//m_Velocity = m_Velocity - sfc * g * m_TimeStep * rVel.normalized; m_Velocity - sfc * g * m_TimeStep * rVel.normalized;
-
-				/* hm */
-				Vector3 angular = m_AngularVelocity 
-					- (((5.0f * sfc * g) / (2.0f * m_Radius)) 
-					   * m_Time) * Vector3.Cross(Vector3.up, m_RelativeVelocity.normalized);
-
-				/*m_AngularVelocity = m_AngularVelocity 
-					- (((5.0f * sfc * g) / (2.0f * m_Radius)) 
-						* m_TimeStep) * Vector3.Cross(Vector3.up, rVel.normalized);*/
-				
-				Debug.Log("ANGDIFF: " + (angular - CalculateAngularVelocity(m_Time)));
-
-				angular = Rotate2D(angular, m_ForwardAngle);
-
-				transform.Rotate(-angular.z * Mathf.Rad2Deg * m_TimeStep, -angular.y * Mathf.Rad2Deg * m_TimeStep, -angular.x * Mathf.Rad2Deg * m_TimeStep);
-
-				pos.x = -vel.y * m_TimeStep;
-				pos.y = vel.x * m_TimeStep;
-				
-				/* tMatrix * pos */
-	
-				pos = Rotate2D(pos, m_ForwardAngle);
-				Vector3 next = transform.position - new Vector3(pos.x, 0, pos.y) * ((1 / m_TimeStep) * m_Velocity.magnitude);
-
-				Debug.DrawLine(transform.position, next, Color.blue);
-
-				transform.position = transform.position - new Vector3(pos.x, 0, pos.y);
-			}
-			else
-			{
-				float rollingDuration = m_Velocity.magnitude / (rfc * g);
-
-				if (firstRoll)
+				if (m_State == State.Sliding)
 				{
-					Debug.Log("Calculated Slide Duration: " + m_FirstDuration + ", Actual Duration: " + m_Time + ", Difference: " + (m_FirstDuration - m_Time));
-					Debug.Log("Rolling duration: " + rollingDuration);
-					m_Velocity = m_Velocity - sfc * g * m_Time * m_RelativeVelocity.normalized;
-					m_Time = m_TimeStep;
-					m_FirstRollingDuration = m_Velocity.magnitude / (rfc * g);
-					m_AngularVelocity = m_AngularVelocity 
-						- (((5.0f * sfc * g) / (2.0f * m_Radius)) 
-						   * m_Time) * Vector3.Cross(Vector3.up, rVel.normalized);
-					Debug.Log("First roll");
+					var diffVRel = (7.0f / 2.0f) * sfc * g * m_TimeStep * m_RelativeVelocity.normalized;
+					if (diffVRel.magnitude > m_RelativeVelocity.magnitude)
+					{
+						m_State = State.Rolling;
+					}
+
+					m_RelativeVelocity -= (7.0f / 2.0f) * sfc * g * m_TimeStep * m_RelativeVelocity.normalized;
+					m_AngularVelocity -= (((5.0f * sfc * g) / (2.0f * m_Radius)) * m_TimeStep) * Vector3.Cross(Vector3.up, m_RelativeVelocity.normalized);
+					m_Velocity -= sfc * g * m_TimeStep * m_RelativeVelocity.normalized;
+
+					Vector2 pos = Vector2.zero;
+					pos.x = -m_Velocity.y * m_TimeStep;
+					pos.y = m_Velocity.x * m_TimeStep;
+					pos = Rotate2D(pos, m_ForwardAngle);
+					transform.position = transform.position - new Vector3(pos.x, 0, pos.y);
 				}
-				Vector3 vel = m_Velocity - rfc * g * m_Time * m_Velocity.normalized;
-
-				pos.x = -vel.y * m_TimeStep;
-				pos.y = vel.x * m_TimeStep;
-
-				Vector3 angularNormal = m_AngularVelocity.normalized;
-				Vector3 angular = angularNormal * (vel.magnitude / m_Radius);
-
-				Debug.Log("ANGDIFF: " + (angular - CalculateAngularVelocity(m_Time)));
-
-				Vector2 tPos = new Vector2(tMatrix[0, 0] * pos.x + tMatrix[0, 1] * pos.y, 
-				                           tMatrix[1, 0] * pos.x + tMatrix[1, 1] * pos.y);
-
-				transform.position = transform.position - new Vector3(tPos.x, 0, tPos.y);
-
-
-				//This is haaard.
-				transform.Rotate(-angular.x * Mathf.Rad2Deg * m_TimeStep, -angular.y * Mathf.Rad2Deg * m_TimeStep, -angular.z * Mathf.Rad2Deg * m_TimeStep);
-				
-				if (rollingDuration - m_TimeStep < 0)
+				else
 				{
-					Still = true;
-					m_Time -= m_TimeStep;
-					Debug.Log("Calculated Full Duration: " + (m_FirstRollingDuration) + ", Actual Duration: " + m_Time + ", Difference: " + (m_FirstRollingDuration - m_Time));
+					Vector3 diff = rfc * g * m_TimeStep * m_Velocity.normalized;
+
+					if (diff.magnitude > m_Velocity.magnitude)
+					{
+						m_State = State.Still;
+						Still = true;
+					}
+					m_Velocity -= diff;
+
+					Debug.Log(m_Velocity);
+					Vector2 pos = Vector2.zero;
+					pos.x = -m_Velocity.y * m_TimeStep;
+					pos.y = m_Velocity.x * m_TimeStep;
+					pos = Rotate2D(pos, m_ForwardAngle);
+					transform.position = transform.position - new Vector3(pos.x, 0, pos.y);
+
+					m_AngularVelocity = m_AngularVelocity.normalized * (m_Velocity.magnitude / m_Radius);
 				}
 			}
-
-			Debug.DrawLine(transform.position, m_EndPos, Color.red);
 		}
 
 		private Vector3 AdvancePrecisePosition(Vector3 currentPos, float time, float deltaTime)

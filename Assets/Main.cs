@@ -61,20 +61,12 @@ namespace Pool
 			m_PoolPlane = GameObject.Instantiate(Resources.Load("Table")) as GameObject;
 			m_Cue = GameObject.Instantiate(Resources.Load("Cue")) as GameObject;
 			m_CueBall = GameObject.Instantiate(Resources.Load("Ball")) as GameObject;
-			m_CueBall.GetComponent<PhysicsModel>().old = false;
 			m_CueBall.GetComponent<PhysicsModel>().precise = false;
 			m_Balls.Add(m_CueBall);
 			m_Cue.transform.position = m_Cue.transform.position + Vector3.up * 1;
 
 			var ball = GameObject.Instantiate(Resources.Load("Ball")) as GameObject;
-			ball.GetComponent<PhysicsModel>().old = true;
-			ball.GetComponent<PhysicsModel>().precise = true;
-			ball.GetComponent<Colorize>().Color = Color.grey;
-			m_Balls.Add(ball);
-
-			ball = GameObject.Instantiate(Resources.Load("Ball")) as GameObject;
-			ball.GetComponent<PhysicsModel>().old = false;
-			ball.GetComponent<PhysicsModel>().precise = true;
+			//ball.GetComponent<PhysicsModel>().precise = true;
 			ball.GetComponent<Colorize>().Color = Color.grey;
 
 			m_Balls.Add(ball);
@@ -92,6 +84,8 @@ namespace Pool
 			//Debug.Log(m_MousePosition + " " + m_MouseMovement);
 			if (m_State == State.Cue)
 			{
+				m_CueBall.GetComponent<Transform>().position = Vector3.zero;
+				m_Balls[1].GetComponent<Transform>().position = Vector3.zero;
 				DoCue();
 			}
 			else if (m_State == State.Pool)
@@ -109,7 +103,6 @@ namespace Pool
 			{
 				m_CueBall.GetComponent<PhysicsModel>().Strike(m_CueInfo);
 				m_Balls[1].GetComponent<PhysicsModel>().Strike(m_CueInfo);
-				m_Balls[2].GetComponent<PhysicsModel>().Strike(m_CueInfo);
 
 				m_CueInfo = m_CueInfo.Clone();
 			
@@ -126,6 +119,7 @@ namespace Pool
 			else if (Input.mousePresent)
 			{
 				m_CueInfo.angle = Mathf.Clamp(Mathf.LerpAngle(m_CueInfo.angle, m_CueInfo.angle + m_MouseMovement.y, Time.deltaTime / 10), 0.01f, Mathf.PI / 4);
+
 				m_CueInfo.forwardAngle = Mathf.LerpAngle(m_CueInfo.forwardAngle, m_CueInfo.forwardAngle - m_MouseMovement.x, Time.deltaTime / 1);
 			}
 			m_CueInfo.viewLength = Mathf.Clamp(m_CueInfo.viewLength - Input.GetAxis("Mouse ScrollWheel"), 0, 10);
