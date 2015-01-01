@@ -23,7 +23,7 @@ namespace Pool
 		private Vector3 m_AngularVelocity;
 		private float m_Inertia;
 		private float m_BufferedDelta;
-		private const float m_TimeStep = 0.001f;
+		private const float m_TimeStep = 0.016f;
 		private const float g = 9.82f;
 		private float m_Angle;
 		private Vector3 m_RelativeVelocity;
@@ -39,6 +39,7 @@ namespace Pool
 		private Vector3 m_FirstVelocity;
 		private Vector3 m_FirstRelativeVelocity;
 		private Vector3 m_FirstAngularVelocity;
+		private Vector3 m_FirstPosition;
 
 		void Start()
 		{
@@ -47,29 +48,59 @@ namespace Pool
 			m_Inertia = (2.0f/5.0f) * m_Mass * m_Radius * m_Radius;
 		}
 
-		Vector3 Rotate2D(Vector3 v, float angle)
+		Vector3 ToTable2D(Vector3 v, float angle)
 		{
 			float[,] tMatrix = new float[2, 2]
 			{ 	
-				{ Mathf.Cos(angle), - Mathf.Sin(angle)},
+				{ Mathf.Cos(angle), -Mathf.Sin(angle)},
 				{ Mathf.Sin(angle), Mathf.Cos(angle) }
 			};
 			
-			return new Vector3(tMatrix[0, 0] * v.x + tMatrix[0, 1] * v.z,
-			                   0,  
-			                   tMatrix[1, 0] * v.x + tMatrix[1, 1] * v.z);
+			return new Vector3(tMatrix[0, 0] * v.x + tMatrix[0, 1] * v.y,
+			                   tMatrix[1, 0] * v.x + tMatrix[1, 1] * v.y,
+			                   0);
 		}
 
-		Vector3 Rotate2D(Vector2 v, float angle)
+		Vector3 ToTable2D(Vector2 v, float angle)
 		{
 			float[,] tMatrix = new float[2, 2]
 			{ 	
-				{ Mathf.Cos(angle), - Mathf.Sin(angle)},
+				{ Mathf.Cos(angle), -Mathf.Sin(angle)},
 				{ Mathf.Sin(angle), Mathf.Cos(angle) }
 			};
 			
 			return new Vector2(tMatrix[0, 0] * v.x + tMatrix[0, 1] * v.y, 
 			                   tMatrix[1, 0] * v.x + tMatrix[1, 1] * v.y);
+		}
+
+		Vector3 ToWorld2D(Vector3 v, float angle)
+		{
+			float[,] tMatrix = new float[2, 2]
+			{ 	
+				{ Mathf.Cos(angle), - Mathf.Sin(angle)},
+				{ Mathf.Sin(angle), Mathf.Cos(angle) }
+			};
+			
+			return new Vector3(tMatrix[0, 0] * v.y + tMatrix[0, 1] * -v.x,
+			                   0,  
+			                   tMatrix[1, 0] * v.y + tMatrix[1, 1] * -v.x);
+		}
+
+		Vector3 ToWorld2D(Vector2 v, float angle)
+		{
+			float[,] tMatrix = new float[2, 2]
+			{ 	
+				{ Mathf.Cos(angle), - Mathf.Sin(angle)},
+				{ Mathf.Sin(angle), Mathf.Cos(angle) }
+			};
+			
+			return new Vector2(tMatrix[0, 0] * v.y + tMatrix[0, 1] * -v.x, 
+			                   tMatrix[1, 0] * v.y + tMatrix[1, 1] * -v.x);
+		}
+
+		public void Reset()
+		{
+			Still = true;
 		}
 
 		public void Strike(Main.CueInfo info)
@@ -103,7 +134,7 @@ namespace Pool
 
 			m_Force = force;
 			m_Velocity = new Vector3(0, (-m_Force / m_Mass) * Mathf.Cos(info.angle), /*0.0f Assumed to be zero.*/ (-m_Force / m_Mass) * Mathf.Sin(info.angle));
-			m_RelativeVelocity = m_Velocity + Vector3.Cross(m_Radius * Vector3.up, m_AngularVelocity);
+			m_RelativeVelocity = m_Velocity + Vector3.Cross(m_Radius * new Vector3(0, 0, 1), m_AngularVelocity);
 
 			Debug.Log("Force: " + force);
 			Debug.Log(string.Format("Velocity: {0}", m_Velocity));
@@ -117,7 +148,7 @@ namespace Pool
 			m_EndPos.z = 
 				+ ((1.0f / 2.0f) * m_StaticFrictionCoefficient * g * m_FirstDuration * m_FirstDuration * m_RelativeVelocity.normalized.y);
 
-			m_EndPos = transform.position - Rotate2D(m_EndPos, m_ForwardAngle);
+			m_EndPos = transform.position + ToWorld2D(m_EndPos, m_ForwardAngle);
 
 			m_Sliding = true;
 			m_Rolling = false;
@@ -128,6 +159,7 @@ namespace Pool
 			m_FirstVelocity = m_Velocity;
 			m_FirstRelativeVelocity = m_RelativeVelocity;
 			m_FirstAngularVelocity = m_AngularVelocity;
+			m_FirstPosition = transform.position;
 		}
 
 		void Update()
@@ -151,7 +183,7 @@ namespace Pool
 		{
 			if (precise)
 			{
-				transform.position = AdvancePrecisePosition(transform.position, m_Time, m_TimeStep);
+				transform.position = CalculatePosition(m_Time);
 			}
 			else
 			{
@@ -160,52 +192,94 @@ namespace Pool
 
 				if (m_State == State.Sliding)
 				{
+				
 					var diffVRel = (7.0f / 2.0f) * sfc * g * m_TimeStep * m_RelativeVelocity.normalized;
+
 					if (diffVRel.magnitude > m_RelativeVelocity.magnitude)
+					{
+						//m_State = State.Rolling;
+					}
+					m_RelativeVelocity = m_Velocity + Vector3.Cross(m_Radius * new Vector3(0, 0, 1), m_AngularVelocity);
+					float timeLeft = (2.0f * m_RelativeVelocity.magnitude) / (7.0f * sfc * g);
+
+					if (timeLeft < m_TimeStep)
 					{
 						m_State = State.Rolling;
 					}
+					Debug.Log("Time left sliding: " + timeLeft);
 
-					m_RelativeVelocity -= (7.0f / 2.0f) * sfc * g * m_TimeStep * m_RelativeVelocity.normalized;
-					m_AngularVelocity -= (((5.0f * sfc * g) / (2.0f * m_Radius)) * m_TimeStep) * Vector3.Cross(Vector3.up, m_RelativeVelocity.normalized);
-					m_Velocity -= sfc * g * m_TimeStep * m_RelativeVelocity.normalized;
+					var prevRVel = m_Velocity + Vector3.Cross(m_Radius * new Vector3(0, 0, 1), m_AngularVelocity);
+					m_AngularVelocity -= m_TimeStep * (((5.0f * sfc * g) / (2.0f * m_Radius)) * Vector3.Cross(new Vector3(0, 0, -1) * m_Radius, m_RelativeVelocity.normalized));
+					m_Velocity -= m_TimeStep * sfc * g * m_RelativeVelocity.normalized;
 
-					Vector2 pos = Vector2.zero;
-					pos.x = -m_Velocity.y * m_TimeStep;
-					pos.y = m_Velocity.x * m_TimeStep;
-					pos = Rotate2D(pos, m_ForwardAngle);
-					transform.position = transform.position - new Vector3(pos.x, 0, pos.y);
+					if (prevRVel.magnitude > m_RelativeVelocity.magnitude)
+					{
+						Debug.Log("Rolling?");
+					}
+					var pos = Vector3.zero;
+					pos -= m_Velocity * m_TimeStep;
+
+					pos = ToWorld2D(pos, m_ForwardAngle);
+					transform.position = transform.position - pos;
 				}
 				else
 				{
-					Vector3 diff = rfc * g * m_TimeStep * m_Velocity.normalized;
+					float timeLeft = m_Velocity.magnitude / rfc * g;
+					float diff = rfc * g * m_TimeStep;
 
-					if (diff.magnitude > m_Velocity.magnitude)
+					if (diff >= m_Velocity.magnitude)
 					{
 						m_State = State.Still;
 						Still = true;
 					}
-					m_Velocity -= diff;
+					m_Velocity -= diff * m_Velocity.normalized;
 
-					Debug.Log(m_Velocity);
-					Vector2 pos = Vector2.zero;
-					pos.x = -m_Velocity.y * m_TimeStep;
-					pos.y = m_Velocity.x * m_TimeStep;
-					pos = Rotate2D(pos, m_ForwardAngle);
-					transform.position = transform.position - new Vector3(pos.x, 0, pos.y);
+					var pos = Vector3.zero;
+					pos -= m_Velocity * m_TimeStep;
 
-					m_AngularVelocity = m_AngularVelocity.normalized * (m_Velocity.magnitude / m_Radius);
+					pos = ToWorld2D(pos, m_ForwardAngle);
+					transform.position = transform.position - pos;
 				}
 			}
 		}
 
-		private Vector3 AdvancePrecisePosition(Vector3 currentPos, float time, float deltaTime)
+		private Vector3 CalculatePosition(float time)
 		{
-			Vector3 pos = Vector3.zero;
-			Vector3 vel = CalculateVelocity(time);
-			pos.x = -vel.y * deltaTime;
-			pos.z = vel.x * deltaTime;
-			return currentPos - Rotate2D(pos, m_ForwardAngle);
+			/*s.17 Shepard*/
+			float sfc = m_StaticFrictionCoefficient;
+			float rfc = m_RollingFrictionCoefficient;
+
+			if (CalculateIsSliding(time))
+			{
+				var pos = m_FirstPosition;
+				var vel = CalculateVelocity(0f);
+
+				pos.x -= CalculateVelocity(0).magnitude /*?*/ * time - (1.0f / 2.0f) * sfc * g * time * time * CalculateRelativeVelocity(0f).normalized.x;
+				pos.y -= (1.0f / 2.0f) * sfc * g * time * time * CalculateRelativeVelocity(0f).normalized.y;
+
+				pos = ToWorld2D(pos, m_ForwardAngle);
+				return pos;
+			}
+			else
+			{
+				// Det här funkar inte dock
+				var pos = m_FirstPosition;
+				var vel = CalculateVelocity(0f);
+				var sliding = CalculateSlidingDuration(0f);
+
+				/* Find position at t=sliding, or t=0 in the rolling ball's frame of reference*/
+				pos.x = -CalculateVelocity(0).magnitude/*?*/ * sliding - (1.0f / 2.0f) * sfc * g * sliding * sliding * CalculateRelativeVelocity(0f).normalized.x;
+				pos.y = -(1.0f / 2.0f) * sfc * g * sliding * sliding * CalculateRelativeVelocity(0f).normalized.y;
+				vel = CalculateVelocity(sliding);
+				float angle = Mathf.Atan2(vel.x, -vel.y);
+				pos = ToTable2D(pos, angle);
+
+				time = time - sliding;
+				Debug.Log(vel);
+				Vector3 delta = vel * time - (1.0f / 2.0f) * rfc * g * time * time * vel.normalized;
+
+				return ToWorld2D(pos, m_ForwardAngle);
+			}
 		}
 
 		private Vector3 CalculateAngularVelocity(float time)
@@ -224,7 +298,7 @@ namespace Pool
 
 				Vector3 angular = m_FirstAngularVelocity 
 				- (((5.0f * sfc * g) / (2.0f * m_Radius)) 
-					   * slide) * Vector3.Cross(Vector3.up, CalculateRelativeVelocity(slide).normalized);
+				   * slide) * Vector3.Cross(new Vector3(0, 0, 1), CalculateRelativeVelocity(slide).normalized);
 
 				Vector3 angularNormal = angular.normalized;
 				return angularNormal * (CalculateVelocity(time).magnitude / m_Radius);
@@ -246,13 +320,13 @@ namespace Pool
 
 			if (CalculateIsSliding(time))
 			{
-				return m_Velocity - sfc * g * time * CalculateRelativeVelocity(0f).normalized;
+				return m_FirstVelocity - sfc * g * time * CalculateRelativeVelocity(0f).normalized;
 			}
 			else
 			{
 				float sliding = CalculateSlidingDuration(0f);
 				Vector3 vel = m_FirstVelocity - sfc * g * sliding * CalculateRelativeVelocity(0f).normalized;
-				return vel - rfc * g * (sliding - time) * m_Velocity.normalized;;
+				return vel - rfc * g * (sliding - time) * vel.normalized;;
 			}
 
 		}
@@ -268,7 +342,7 @@ namespace Pool
 		private bool CalculateIsSliding(float time)
 		{
 			float slidingDuration = CalculateSlidingDuration(0f);
-			return time < slidingDuration;
+			return time <= slidingDuration;
 		}
 
 		private bool CalculateIsRolling(float time)

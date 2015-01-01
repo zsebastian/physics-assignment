@@ -30,6 +30,10 @@ namespace Pool
 
 			public float cueVelocity = 1f;
 
+			public float cueVelocityDelta = 2.5f;
+			public float maxCueVelocity = 2.0f;
+			public float minCueVelocity = 0.1f;
+
 			public CueInfo Clone()
 			{
 				return MemberwiseClone() as CueInfo;
@@ -66,7 +70,7 @@ namespace Pool
 			m_Cue.transform.position = m_Cue.transform.position + Vector3.up * 1;
 
 			var ball = GameObject.Instantiate(Resources.Load("Ball")) as GameObject;
-			//ball.GetComponent<PhysicsModel>().precise = true;
+			ball.GetComponent<PhysicsModel>().precise = true;
 			ball.GetComponent<Colorize>().Color = Color.grey;
 
 			m_Balls.Add(ball);
@@ -99,14 +103,32 @@ namespace Pool
 			var tCue = m_Cue.GetComponent<Transform>();
 			var tBall = m_CueBall.GetComponent<Transform>();
 
-			if (Input.mousePresent && Input.GetMouseButtonDown(0))
+			if (Input.mousePresent && Input.GetMouseButton(0))
 			{
+				m_CueInfo.cueVelocity += m_CueInfo.cueVelocityDelta * Time.deltaTime;
+
+				if (m_CueInfo.cueVelocity > m_CueInfo.maxCueVelocity)
+				{
+					m_CueInfo.cueVelocity = m_CueInfo.maxCueVelocity;
+					m_CueInfo.cueVelocityDelta = -m_CueInfo.cueVelocityDelta;
+				}
+				else if (m_CueInfo.cueVelocity < m_CueInfo.minCueVelocity)
+				{
+					m_CueInfo.cueVelocity = m_CueInfo.minCueVelocity;
+					m_CueInfo.cueVelocityDelta = -m_CueInfo.cueVelocityDelta;
+				}
+			}
+			if (Input.mousePresent && Input.GetMouseButtonUp(0))
+			{
+				Debug.Log(m_CueInfo.cueVelocity);
 				m_CueBall.GetComponent<PhysicsModel>().Strike(m_CueInfo);
 				m_Balls[1].GetComponent<PhysicsModel>().Strike(m_CueInfo);
-
-				m_CueInfo = m_CueInfo.Clone();
-			
+				
+				m_CueInfo = new CueInfo();
+				
 				m_State = State.Pool;
+				GameObject.Destroy(m_Cue);
+				return;
 			}
 			else if (Input.mousePresent && Input.GetMouseButton(1))
 			{
@@ -122,10 +144,11 @@ namespace Pool
 
 				m_CueInfo.forwardAngle = Mathf.LerpAngle(m_CueInfo.forwardAngle, m_CueInfo.forwardAngle - m_MouseMovement.x, Time.deltaTime / 1);
 			}
+
 			m_CueInfo.viewLength = Mathf.Clamp(m_CueInfo.viewLength - Input.GetAxis("Mouse ScrollWheel"), 0, 10);
 
 			var cuePos = tCue.position;
-			cuePos = tBall.position + new Vector3(Mathf.Cos(m_CueInfo.forwardAngle) * (2 * m_BallRadius), 0, Mathf.Sin( m_CueInfo.forwardAngle) * (2 * m_BallRadius));
+			cuePos = tBall.position + new Vector3(Mathf.Cos(m_CueInfo.forwardAngle) * (2 * m_BallRadius), 0, Mathf.Sin(m_CueInfo.forwardAngle) * (2 * m_BallRadius));
 
 			cuePos += new Vector3(0, m_CueInfo.position.y, 0);
 			cuePos += new Vector3(Mathf.Cos(m_CueInfo.forwardAngle + Mathf.PI / 2) * m_CueInfo.position.x, 0, Mathf.Sin(m_CueInfo.forwardAngle + Mathf.PI / 2) * m_CueInfo.position.x);
@@ -142,22 +165,48 @@ namespace Pool
 			transform.LookAt(tBall.position);
 		}
 
+		void OnGUI() 
+		{
+			Vector2 pos = new Vector2(100, 400);
+			Vector2 size = new Vector2(400, 50);
+		
+			float barDisplay = 1 - (m_CueInfo.maxCueVelocity - m_CueInfo.cueVelocity) / (m_CueInfo.maxCueVelocity - m_CueInfo.minCueVelocity);
+			// draw the background:
+			GUI.BeginGroup (new Rect (pos.x, pos.y, size.x, size.y));
+			GUI.Box (new Rect (0,0, size.x, size.y), "");
+			
+			// draw the filled-in part:
+			GUI.BeginGroup (new Rect (0, 0, size.x * barDisplay, size.y));
+			GUI.Box (new Rect (0,0, size.x, size.y), "");
+			GUI.EndGroup ();
+			
+			GUI.EndGroup ();
+		}
+
 		void DoPool()
 		{
-			foreach(var ball in m_Balls)
-			{
+			bool someBallIsMoving = !Input.GetKeyUp(KeyCode.Space);
 
-			}
-			bool someBallIsMoving = false;
-			foreach(var ball in m_Balls)
+			if (someBallIsMoving)
 			{
-				if (!ball.GetComponent<PhysicsModel>().Still)
+				foreach(var ball in m_Balls)
 				{
-					someBallIsMoving = true;
+					if (!ball.GetComponent<PhysicsModel>().Still)
+					{
+						someBallIsMoving = true;
+					}
 				}
 			}
+
 			if (!someBallIsMoving)
 			{
+				m_Cue = GameObject.Instantiate(Resources.Load("Cue")) as GameObject;
+
+				foreach(var ball in m_Balls)
+				{
+					ball.GetComponent<PhysicsModel>().Reset();
+				}
+
 				m_State = State.Cue;
 			}
 		}
