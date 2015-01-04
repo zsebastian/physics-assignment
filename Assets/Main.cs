@@ -63,6 +63,23 @@ namespace Pool
 			m_MouseMovement = Vector2.zero;
 			m_State = State.Cue;
 			m_PoolPlane = GameObject.Instantiate(Resources.Load("Table")) as GameObject;
+
+			for (int i = -1; i <= 1; ++i)
+			{
+				for (int j = -1; j <= 1; ++j)
+				{
+					if (i == 0 && i == j)
+					{
+						continue;
+					}
+					var plane = GameObject.Instantiate(Resources.Load("Table")) as GameObject;
+					var pos = plane.transform.position;
+					pos.x = i * 10;
+					pos.z = j * 10;
+					//pos.y -= m_BallRadius;
+					plane.transform.position = pos;
+				}
+			}
 			m_Cue = GameObject.Instantiate(Resources.Load("Cue")) as GameObject;
 			m_CueBall = GameObject.Instantiate(Resources.Load("Ball")) as GameObject;
 			m_CueBall.GetComponent<PhysicsModel>().precise = false;

@@ -31,7 +31,6 @@ namespace Pool
 		private float m_FirstDuration;
 		private float m_StaticFrictionCoefficient = 0.2f;
 		private float m_RollingFrictionCoefficient = 0.015f;
-		private Vector3 m_EndPos;
 		private bool m_Sliding = false;
 		private bool m_Rolling = false;
 		private float m_FirstRollingDuration;
@@ -134,21 +133,13 @@ namespace Pool
 
 			m_Force = force;
 			m_Velocity = new Vector3(0, (-m_Force / m_Mass) * Mathf.Cos(info.angle), /*0.0f Assumed to be zero.*/ (-m_Force / m_Mass) * Mathf.Sin(info.angle));
-			m_RelativeVelocity = m_Velocity + Vector3.Cross(m_Radius * new Vector3(0, 0, 1), m_AngularVelocity);
+			m_RelativeVelocity = m_Velocity + Vector3.Cross(m_Radius * new Vector3(0, 0, -1), m_AngularVelocity);
 
 			Debug.Log("Force: " + force);
 			Debug.Log(string.Format("Velocity: {0}", m_Velocity));
 			Debug.Log(string.Format("Angular Velocity: {0}", m_AngularVelocity));
 			m_FirstDuration = (2.0f * m_RelativeVelocity.magnitude) / (7.0f * m_StaticFrictionCoefficient * g);
 			m_Angle = info.angle;
-
-			m_EndPos.x = m_Velocity.magnitude * m_FirstDuration 
-				- ((1.0f / 2.0f) * m_StaticFrictionCoefficient * g * m_FirstDuration * m_FirstDuration * m_RelativeVelocity.normalized.x);
-
-			m_EndPos.z = 
-				+ ((1.0f / 2.0f) * m_StaticFrictionCoefficient * g * m_FirstDuration * m_FirstDuration * m_RelativeVelocity.normalized.y);
-
-			m_EndPos = transform.position + ToWorld2D(m_EndPos, m_ForwardAngle);
 
 			m_Sliding = true;
 			m_Rolling = false;
@@ -197,28 +188,22 @@ namespace Pool
 
 					if (diffVRel.magnitude > m_RelativeVelocity.magnitude)
 					{
-						//m_State = State.Rolling;
+						m_State = State.Rolling;
 					}
-					m_RelativeVelocity = m_Velocity + Vector3.Cross(m_Radius * new Vector3(0, 0, 1), m_AngularVelocity);
+					m_RelativeVelocity -= diffVRel;
+
 					float timeLeft = (2.0f * m_RelativeVelocity.magnitude) / (7.0f * sfc * g);
 
-					if (timeLeft < m_TimeStep)
+					if (timeLeft <= m_TimeStep)
 					{
 						m_State = State.Rolling;
 					}
-					Debug.Log("Time left sliding: " + timeLeft);
 
-					var prevRVel = m_Velocity + Vector3.Cross(m_Radius * new Vector3(0, 0, 1), m_AngularVelocity);
 					m_AngularVelocity -= m_TimeStep * (((5.0f * sfc * g) / (2.0f * m_Radius)) * Vector3.Cross(new Vector3(0, 0, -1) * m_Radius, m_RelativeVelocity.normalized));
 					m_Velocity -= m_TimeStep * sfc * g * m_RelativeVelocity.normalized;
 
-					if (prevRVel.magnitude > m_RelativeVelocity.magnitude)
-					{
-						Debug.Log("Rolling?");
-					}
 					var pos = Vector3.zero;
 					pos -= m_Velocity * m_TimeStep;
-
 					pos = ToWorld2D(pos, m_ForwardAngle);
 					transform.position = transform.position - pos;
 				}
@@ -236,7 +221,6 @@ namespace Pool
 
 					var pos = Vector3.zero;
 					pos -= m_Velocity * m_TimeStep;
-
 					pos = ToWorld2D(pos, m_ForwardAngle);
 					transform.position = transform.position - pos;
 				}
@@ -245,7 +229,6 @@ namespace Pool
 
 		private Vector3 CalculatePosition(float time)
 		{
-			/*s.17 Shepard*/
 			float sfc = m_StaticFrictionCoefficient;
 			float rfc = m_RollingFrictionCoefficient;
 
@@ -254,8 +237,12 @@ namespace Pool
 				var pos = m_FirstPosition;
 				var vel = CalculateVelocity(0f);
 
-				pos.x -= CalculateVelocity(0).magnitude /*?*/ * time - (1.0f / 2.0f) * sfc * g * time * time * CalculateRelativeVelocity(0f).normalized.x;
-				pos.y -= (1.0f / 2.0f) * sfc * g * time * time * CalculateRelativeVelocity(0f).normalized.y;
+				pos.x += CalculateVelocity(0).magnitude /*?*/ * time - (1.0f / 2.0f) * sfc * g * time * time * CalculateRelativeVelocity(0f).normalized.y;
+				pos.y += (1.0f / 2.0f) * sfc * g * time * time * CalculateRelativeVelocity(0f).normalized.x;
+
+				vel = CalculateVelocity(time);
+				float angle = Mathf.Atan2(vel.y, vel.x);
+				pos = ToTable2D(pos, angle);
 
 				pos = ToWorld2D(pos, m_ForwardAngle);
 				return pos;
@@ -268,15 +255,25 @@ namespace Pool
 				var sliding = CalculateSlidingDuration(0f);
 
 				/* Find position at t=sliding, or t=0 in the rolling ball's frame of reference*/
-				pos.x = -CalculateVelocity(0).magnitude/*?*/ * sliding - (1.0f / 2.0f) * sfc * g * sliding * sliding * CalculateRelativeVelocity(0f).normalized.x;
-				pos.y = -(1.0f / 2.0f) * sfc * g * sliding * sliding * CalculateRelativeVelocity(0f).normalized.y;
+				pos.x += CalculateVelocity(0).magnitude /*?*/ * sliding - (1.0f / 2.0f) * sfc * g * sliding * sliding * CalculateRelativeVelocity(0f).normalized.y;
+				pos.y += (1.0f / 2.0f) * sfc * g * sliding * sliding * CalculateRelativeVelocity(0f).normalized.x;
+				
 				vel = CalculateVelocity(sliding);
-				float angle = Mathf.Atan2(vel.x, -vel.y);
+				float angle = Mathf.Atan2(vel.y, vel.x);
 				pos = ToTable2D(pos, angle);
 
 				time = time - sliding;
-				Debug.Log(vel);
+				float duration = vel.magnitude / rfc * g;
+				if (duration < 0)
+				{
+					m_State = State.Still;
+					Still = true;
+
+					return ToWorld2D(pos, m_ForwardAngle);;
+				}
+
 				Vector3 delta = vel * time - (1.0f / 2.0f) * rfc * g * time * time * vel.normalized;
+				pos += delta;
 
 				return ToWorld2D(pos, m_ForwardAngle);
 			}
@@ -328,9 +325,7 @@ namespace Pool
 				Vector3 vel = m_FirstVelocity - sfc * g * sliding * CalculateRelativeVelocity(0f).normalized;
 				return vel - rfc * g * (sliding - time) * vel.normalized;;
 			}
-
 		}
-
 
 		private float CalculateSlidingDuration(float time)
 		{
